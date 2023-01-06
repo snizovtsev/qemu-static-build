@@ -4,16 +4,16 @@ set -e
 set -o pipefail
 
 info() {
-    >&2 echo "=== " $@  " === "
+    >&2 echo "=== " "$@"  " === "
 }
 
 cleanbuild() {
     info "Clean build directory"
-    MARKER=build/auto-created-by-build-sh
+    local marker=build/auto-created-by-build-sh
 
     if test -e build
     then
-        if test -f $MARKER
+        if test -f $marker
         then
             rm -rf build
         else
@@ -24,16 +24,16 @@ cleanbuild() {
 
     mkdir -p build/install
     mkdir -p build/dist/qemu-bundle
-    touch $MARKER
+    touch $marker
 }
 
 patch1="../patches/qemu-semistatic-build.patch"
 
 gitlike_apply() {
-    local opts="${@:1:$#-1}"
-    local file="${@: -1}"
-    patch $opts -f --dry-run < "$file" \
-    && patch $opts -f < "$file" >/dev/null \
+    local opts=( "${@:1:$#-1}" )
+    local file=${*: -1}
+    patch "${opts[@]}" -f --dry-run < "$file" \
+    && patch "${opts[@]}" -f < "$file" >/dev/null \
     || echo "Failed to apply $file"
 }
 
@@ -52,7 +52,7 @@ unpatch() {
 
 configure() {
     info "Configure"
-    IFS='' apt list ${BUILD_DEPS} 2> /dev/null \
+    apt list ${BUILD_DEPS} \
       | tail -n +2 | sed 's/.*/dpkg: \0/'
     ../qemu/configure \
         --target-list=x86_64-softmmu \
