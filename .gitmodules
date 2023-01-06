@@ -2,3 +2,7 @@
 	path = qemu
 	url = git@gitlab.com:qemu-project/qemu.git
 	shallow = true
+[submodule "libslirp"]
+	path = libslirp
+	url = https://gitlab.freedesktop.org/slirp/libslirp.git
+	shallow = true
