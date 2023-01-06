@@ -7,17 +7,8 @@ info() {
     >&2 echo "=== " $@  " === "
 }
 
-preamble() {
-    info "Write preamble"
-    IFS='' apt list ${BUILD_DEPS} 2> /dev/null \
-      | tail -n +2 | sed 's/.*/dpkg: \0/'
-    echo -n "git: libslirp "
-    git -C ../qemu describe --long
-    git -C ../libslirp describe --long
-}
-
-prepare() {
-    info "Prepare build directory"
+cleanbuild() {
+    info "Clean build directory"
     MARKER=build/auto-created-by-build-sh
 
     if test -e build
@@ -34,32 +25,42 @@ prepare() {
     mkdir -p build/install
     mkdir -p build/dist/qemu-bundle
     touch $MARKER
-    cd build || exit 1
 }
 
 patch1="../patches/qemu-semistatic-build.patch"
 
-patch() {
-    info "Apply patches"
+gitlike_apply() {
+    local opts="${@:1:$#-1}"
+    local file="${@: -1}"
+    patch $opts -f --dry-run < "$file" \
+    && patch $opts -f < "$file" >/dev/null \
+    || echo "Failed to apply $file"
+}
+
+prepare() {
+    info "Prepare sources"
+    gitlike_apply -d ../qemu "${patch1}"
     ln -sf ../../libslirp ../qemu/subprojects
-    git -C ../qemu apply "${patch1}"
     trap unpatch EXIT
 }
 
 unpatch() {
     info "Reverting patches"
     rm -f ../qemu/subprojects/libslirp
-    git -C ../qemu apply -R "${patch1}"
+    gitlike_apply -Rd ../qemu "${patch1}"
 }
 
 configure() {
     info "Configure"
+    IFS='' apt list ${BUILD_DEPS} 2> /dev/null \
+      | tail -n +2 | sed 's/.*/dpkg: \0/'
     ../qemu/configure \
+        --target-list=x86_64-softmmu \
         --prefix=/ \
         --datadir="" \
         --with-suffix="" \
         --firmwarepath="" \
-        --target-list=x86_64-softmmu \
+        --with-git-submodules=ignore \
         --enable-fdt=internal \
         --without-default-features \
         --static=semi \
@@ -97,9 +98,9 @@ distribute() {
     rm qemu.strings
 }
 
+cleanbuild
+cd build || exit 1
 prepare
-preamble > build-manifest.txt
-patch
 configure | tee -a build-manifest.txt
 build
 distribute | tee -a build-manifest.txt
