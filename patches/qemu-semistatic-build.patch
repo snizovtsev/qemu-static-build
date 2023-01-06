@@ -1,0 +1,93 @@
+diff --git a/configure b/configure
+index 26c7bc5154..0c8e35c072 100755
+--- a/configure
++++ b/configure
+@@ -762,6 +762,9 @@ for opt do
+   ;;
+   --without-default-features) # processed above
+   ;;
++  --static=semi)
++    static="semi"
++  ;;
+   --static)
+     static="yes"
+     QEMU_PKG_CONFIG_FLAGS="--static $QEMU_PKG_CONFIG_FLAGS"
+@@ -2364,9 +2367,12 @@ fi
+ if test "$solaris" = "yes" ; then
+   echo "CONFIG_SOLARIS=y" >> $config_host_mak
+ fi
+-if test "$static" = "yes" ; then
++if test "$static" = "yes" || test "$static" = "semi"; then
+   echo "CONFIG_STATIC=y" >> $config_host_mak
+ fi
++if test "$static" = "semi"; then
++  echo "CONFIG_SEMISTATIC=y" >> $config_host_mak
++fi
+ echo "SRC_PATH=$source_path" >> $config_host_mak
+ echo "TARGET_DIRS=$target_list" >> $config_host_mak
+ if test "$modules" = "yes"; then
+diff --git a/meson.build b/meson.build
+index 5c6b5a1c75..fbef551f94 100644
+--- a/meson.build
++++ b/meson.build
+@@ -19,9 +19,11 @@ cc = meson.get_compiler('c')
+ config_host = keyval.load(meson.current_build_dir() / 'config-host.mak')
+ enable_modules = 'CONFIG_MODULES' in config_host
+ enable_static = 'CONFIG_STATIC' in config_host
++enable_full_static = not ('CONFIG_SEMISTATIC' in config_host)
+ 
+ # Allow both shared and static libraries unless --enable-static
+ static_kwargs = enable_static ? {'static': true} : {}
++full_static_kwargs = enable_full_static ? {'static': true} : {}
+ 
+ # Temporary directory used for files created while
+ # configure runs. Since it is in the build directory
+@@ -183,7 +185,7 @@ qemu_cflags = config_host['QEMU_CFLAGS'].split()
+ qemu_objcflags = config_host['QEMU_OBJCFLAGS'].split()
+ qemu_ldflags = config_host['QEMU_LDFLAGS'].split()
+ 
+-if enable_static
++if enable_full_static
+   qemu_ldflags += get_option('b_pie') ? '-static-pie' : '-static'
+ endif
+ 
+@@ -502,12 +504,8 @@ endif
+ # grandfathered in from the QEMU Makefiles.
+ add_project_arguments(config_host['GLIB_CFLAGS'].split(),
+                       native: false, language: ['c', 'cpp', 'objc'])
+-glib = declare_dependency(compile_args: config_host['GLIB_CFLAGS'].split(),
+-                          link_args: config_host['GLIB_LIBS'].split(),
+-                          version: config_host['GLIB_VERSION'],
+-                          variables: {
+-                            'bindir': config_host['GLIB_BINDIR'],
+-                          })
++glib = dependency('glib-2.0', required: have_system,
++                  method: 'pkg-config', kwargs: static_kwargs)
+ # override glib dep with the configure results (for subprojects)
+ meson.override_dependency('glib-2.0', glib)
+ 
+@@ -553,7 +551,7 @@ if have_system or have_tools
+   pixman = dependency('pixman-1', required: have_system, version:'>=0.21.8',
+                       method: 'pkg-config', kwargs: static_kwargs)
+ endif
+-zlib = dependency('zlib', required: true, kwargs: static_kwargs)
++zlib = dependency('zlib', required: true, kwargs: full_static_kwargs)
+ 
+ libaio = not_found
+ if not get_option('linux_aio').auto() or have_block
+@@ -676,8 +674,13 @@ endif
+ 
+ slirp = not_found
+ if not get_option('slirp').auto() or have_system
+-  slirp = dependency('slirp', required: get_option('slirp'),
+-                     method: 'pkg-config', kwargs: static_kwargs)
++  libslirp_opts = enable_static ?                 \
++                  {'default_options': [           \
++                      'default_library=static',   \
++                  ]} : {}
++  libslirp_proj = subproject('libslirp', kwargs: libslirp_opts)
++  slirp = libslirp_proj.get_variable('libslirp_dep')
++
+   # slirp < 4.7 is incompatible with CFI support in QEMU.  This is because
+   # it passes function pointers within libslirp as callbacks for timers.
+   # When using a system-wide shared libslirp, the type information for the
