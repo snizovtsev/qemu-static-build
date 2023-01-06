@@ -1,6 +1,6 @@
 [submodule "qemu"]
 	path = qemu
-	url = git@gitlab.com:qemu-project/qemu.git
+	url = https://gitlab.com/qemu-project/qemu.git
 	shallow = true
 [submodule "libslirp"]
 	path = libslirp
