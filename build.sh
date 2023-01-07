@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+arch="$1"
+outdir=$(readlink -f "$2")
+
 info() {
     >&2 echo "=== " "$@"  " === "
 }
@@ -23,7 +26,7 @@ cleanbuild() {
     fi
 
     mkdir -p build/install
-    mkdir -p build/dist/qemu-bundle
+    mkdir -p "${outdir}"/qemu-bundle/keymaps
     touch $marker
 }
 
@@ -55,7 +58,7 @@ configure() {
     apt list ${BUILD_DEPS} \
       | tail -n +2 | sed 's/.*/dpkg: \0/'
     ../qemu/configure \
-        --target-list=x86_64-softmmu \
+        --target-list="${arch}" \
         --prefix=/ \
         --datadir="" \
         --with-suffix="" \
@@ -81,9 +84,11 @@ build() {
 
 distribute() {
     info "Distribute"
-    strings install/bin/qemu* > qemu.strings
-    mv install/bin/qemu* dist/
-    mv install/keymaps dist/qemu-bundle
+
+    local executable=( install/bin/qemu-system-* )
+    strings "${executable[0]}" > qemu.strings
+    install -m755 "${executable[0]}" "${outdir}"/
+    install -m644 install/keymaps/* "${outdir}"/qemu-bundle/keymaps/
 
     # Find which blobs are referred in binary and move to bundle
     find install -maxdepth 1 -type f -printf '%P\n' | while read -r blob; do
@@ -92,7 +97,7 @@ distribute() {
         continue
         fi
         echo -n "+$blob "
-        mv install/"$blob" dist/qemu-bundle/
+        install -m644 install/"$blob" "${outdir}"/qemu-bundle/
     done
     echo
     rm qemu.strings
