@@ -14,5 +14,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 1
+        submodules: recursive
     - name: Build the Docker image
       run: DOCKER_BUILDKIT=1 docker build . --file Dockerfile --tag qemu-static:$(date +%s)
